@@ -1,25 +1,116 @@
 ---
-title: "Reproducible Research: Peer Assessment 1"
-output: 
-  html_document:
-    keep_md: true
+title: "Course 5 - Reproducible Research Project 1"
+author: "Anne"
+date: "12/9/2017"
+output: md_document
 ---
 
+  
+  
+### Read the activity data and change second column to Date format  
+  
+First I read in the data.
 
-## Loading and preprocessing the data
+```{r read, echo=TRUE}
+activity <- read.csv('/Users/Anne/Documents/*Work/Coursera/Course 5 - Reproducible Research/Course project 1/activity.csv')
+activity$date <- as.Date(activity$date,"%Y-%m-%d",tz="UTC")
+```
+  
+Set the global options to round the numbers since.
 
+```{r setoptions,echo=TRUE}
+options(scipen = 1, digits = 0)
+```
 
+### Calculate the mean total number of steps taken per day  
+  
+Ignoring the missing values I calculate the daily total steps, using the tapply function. Then I plot a histogram, using the hist function, before calculating the daily total mean and median.  
 
-## What is mean total number of steps taken per day?
+```{r calculate mean, echo=TRUE}
+daily_total <- tapply(activity$steps,as.factor(activity$date),sum)
+hist(daily_total, main="Histogram of daily total number of steps",xlab="Steps",breaks=10)
+daily_total_mean <- round(mean(daily_total,na.rm=T))
+daily_total_median <- round(median(daily_total,na.rm=T))
+```
 
+The mean of the daily total number of steps is `r daily_total_mean` and the median is `r daily_total_median`.
 
+### Calculate the daily average activity pattern  
+  
+Now I calculate the daily average pattern, again using the tapply function, which is then plotted.  
 
-## What is the average daily activity pattern?
+```{r average pattern, echo=TRUE}
+daily_ave_pattern <- tapply(activity$steps,as.factor(activity$interval),mean,na.rm=T)
+plot(names(daily_ave_pattern),daily_ave_pattern,type='l',main='Daily Average Activity Pattern',xlab='5-minute interval',ylab='Number of steps')
+```
+  
+To find the 5-minute interval that, on average, has the highest number of steps per day, we can use the function which.max on the daily average pattern.  
 
+```{r max interval,echo=TRUE}
+ave_max <- names(daily_ave_pattern)[which.max(daily_ave_pattern)]
+```
 
+The most active 5-minute interval, on average, is the `r ave_max` interval.  
 
-## Imputing missing values
+### Imputing missing values  
+  
+First I calculate the total number of missing values.  
 
+```{r missing values, echo=TRUE}
+total_missing_values <- length(which(is.na(activity$steps)))
+```
+  
+The total number of missing values is: `r total_missing_values`.  
+  
+Next I fill in the missing values by replacing them with the mean for that 5-minute interval.  
 
+```{r impute missing values, echo=TRUE}
+activity2 <- activity
+for (i in 1:nrow(activity)){
+  if (is.na(activity[i,1])) activity2[i,1] <- round(mean(activity[which(activity[,3]==activity[i,3]),1],na.rm=T))
+}
+```
+  
+I now recalculate the daily total number of steps with the new dataset without missing values and plot the histogram.  
+  
+```{r calculate mean again, echo=TRUE}
+daily_total2 <- tapply(activity2$steps,as.factor(activity2$date),sum)
+hist(daily_total2, main="Histogram of daily total number of steps\nwith missing values imputed",xlab="Steps",breaks=10)
+daily_total_mean2 <- round(mean(daily_total2))
+daily_total_median2 <- round(median(daily_total2))
+```
 
-## Are there differences in activity patterns between weekdays and weekends?
+The new mean of the daily total is now `r daily_total_mean2` and the new median is `r daily_total_median2`. To compare with the previous mean and median, let's make a table:
+
+```{r table, results="asis", echo=TRUE}
+summary <- matrix(round(c(daily_total_mean,daily_total_median,daily_total_mean2,daily_total_median2)),nrow=2,dimnames=list(c("With NAs","Without NAs"),c("Mean","Median")))
+library(xtable)
+xt <- xtable(summary)
+print(xt,type="html")
+```
+  
+
+The table shows that, because we used a method to impute the NAs that took the average of the other days at the same 5-minute interval, there isn't much difference between the two sets of means and medians. The new median is lower by 3 steps, but that is very insignificant, hence the impact from replacing the NAs is very small in this case.  
+
+### Finding differences in activity patterns between weekdays and weekends  
+  
+To separate the weekdays and weekends we can use the function weekdays on the date.
+
+```{r weekends, echo=TRUE}
+wk <- weekdays(activity2$date)
+wk[which(wk=="Saturday" | wk=="Sunday")] <- "weekend"
+wk[which(! wk=="weekend")] <- "weekday"
+weekday <- as.factor(wk)
+activity2 <- cbind(activity2,weekday)
+```
+
+Now we can plot the time series separately for weekdays and weekends to see if there is a difference in activity patterns.  
+
+```{r panel plot, echo=TRUE}
+weekday_weekend_pattern <- round(tapply(activity2$steps,list(as.factor(activity2$interval),activity2$weekday),mean,na.rm=T))
+library(reshape2)
+weekday_weekend_pattern2 <- melt(weekday_weekend_pattern)
+colnames(weekday_weekend_pattern2) <- c("Interval","Weekday","Steps")
+library(lattice)
+xyplot(Steps ~ Interval|Weekday, data=weekday_weekend_pattern2, main="Activity Pattern by Weekday or Weekend",type='l',layout=c(1,2))
+```
